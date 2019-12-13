@@ -68,6 +68,8 @@ HDF5LIBS    = -L$(HDF5ROOT)/lib -lhdf5
 HDF5INCLUDE = -I$(HDF5ROOT)/include
 H5PART_LIBS    = -L$(H5PART_DIR)/lib -lH5Part
 H5PART_INCLUDE = -I$(H5PART_DIR)/include
+FITSLIBS = -L$(FITS_DIR)/lib -lcfitsio
+FITSINCLUDE = -I$(FITS_DIR)/include
 #
 # this file contains system-dependent routines like getarg, iargc etc.
 #
@@ -136,7 +138,7 @@ endif
 ifeq ($(SYSTEM), gfortran)
 #  gfortran compiler (part of gcc 4.x.x)
    FC= gfortran
-   FFLAGS= -O3 -frecord-marker=4
+   FFLAGS= -O3 -frecord-marker=4 -fPIC
    DBLFLAGS= -fdefault-real-8 -fdefault-double-8
    SYSTEMFILE= system_f2003.f90
    DEBUGFLAG= -Wall -Wextra -pedantic -g -frange-check -fcheck=all -fbacktrace \
@@ -519,6 +521,13 @@ cactus_hdf5: checksystem checkhdf5 $(OBJECTS) read_data_cactus_hdf5_futils.o rea
 read_data_cactus_hdf5_utils.o: read_data_cactus_hdf5_utils.c
 	$(CC) $(CFLAGS) $(HDF5INCLUDE) -c $< -o $@
 
+#---FITS read ---
+fits: checksystem checkfits $(OBJECTS) read_data_fits_futils.o read_data_fits_utils.o read_data_fits.o
+	$(FC) $(FFLAGS) -o $(BINDIR)/splash-fits $(OBJECTS) read_data_fits_futils.o read_data_fits_utils.o read_data_fits.o $(LDFLAGS) $(FITSLIBS)
+
+read_data_fits_utils.o: read_data_fits_utils.c
+	$(CC) $(CFLAGS) $(FITSINCLUDE) -c $< -o $@
+
 #---PBOB read ---
 
 OBJPBOB=read_data_pbob_utils.o read_data_pbob.o read_pbob.o read_particle.o
@@ -657,14 +666,33 @@ OBJGRID2PDF= ${SRCGRID2PDF:.f90=.o}
 grid2pdf: checksystem $(OBJGRID2PDF)
 	$(FC) $(FFLAGS) -o $(BINDIR)/$@ $(OBJGRID2PDF)
 
-SRCLIB= sort.f90 asciiutils.f90 kernels.f90 timing.f90 globaldata.f90 \
-		labels.f90 interpolation.f90 interpolate3D_projection.F90 \
-		interpolate3D_opacity.f90 interpolate3D_xsec.f90 libsplash.f90
-OBJLIB1= ${SRCLIB:.f90=.o}
-OBJLIB= $(OBJLIB1:.F90=.o)
+SRCLIB= sort.f90 asciiutils.f90 kernels.f90 timing.f90 geometry.f90 interpolation.f90 \
+      interpolate1D.f90 interpolate2D.f90 interpolate3D.F90 \
+      interpolate3D_geom.F90 interpolate3D_projection.F90 \
+      interpolate3D_proj_geom.F90 interpolate3D_opacity.f90 interpolate3D_xsec.f90 \
+      libsplash.f90
+OBJLIB1=${SRCLIB:.f90=.o}
+OBJLIB=${OBJLIB1:.F90=.o}
+
+.PHONY: libsplash
+libsplash: lib
 
 lib: $(OBJLIB)
-	$(FC) -shared -fPIC $(FFLAGS) $(FPPFLAGS) $(DBLFLAGS) ${OBJLIB} -o libsplash.so
+	$(FC) -shared -fPIC $(FFLAGS) $(FPPFLAGS) $(DBLFLAGS) $(OBJLIB) -o libsplash.so
+
+SRCLIBEXACT= plotlib_mock.f90 exact_shock.f90 exact_shock_sr.f90 exact_sedov.f90 \
+	exact_polytrope.f90 exact_toystar1D.f90 exact_toystar2D.f90 exact_gresho.f90 \
+	exact_mhdshock.f90 exact_rhoh.f90 exact_densityprofiles.f90 exact_torus.f90 \
+	exact_ringspread.f90 cubicsolve.f90 exact_dustywaves.f90 exact_rochelobe.f90 \
+	exact_Cshock.f90 exact_planetdisc.f90 exact_bondi.f90 \
+	libexact.f90
+OBJLIBEXACT=${SRCLIBEXACT:.f90=.o}
+OBJLIBEXACTALL=${OBJLIBEXACT:.F90=.o}
+
+.PHONY: libexact
+libexact: libexactcmd
+libexactcmd: checksystem $(OBJLIBEXACTALL)
+	$(FC) -shared -fPIC $(FFLAGS) $(FPPFLAGS) $(DBLFLAGS) $(OBJLIBEXACTALL) -o libexact.so
 
 checksystem:
    ifeq ($(KNOWN_SYSTEM), yes)
@@ -773,9 +801,16 @@ checkhdf5:
 
 checksilo: checkhdf5
    ifeq (X${SILO_DIR}, X)
-	@echo; echo "ERROR: SILO_DIR should be set before compiling splash with SILO reader"; echo; ${MAKE} err;
+	   @echo; echo "ERROR: SILO_DIR should be set before compiling splash with SILO reader"; echo; ${MAKE} err;
    else
-	@if [ -d $$SILO_DIR ]; then echo; echo "SILO_DIR=$$SILO_DIR"; echo; else echo; echo "ERROR: Directory given by SILO_DIR=$$SILO_DIR does not exist"; echo; ${MAKE} err; fi;
+	   @if [ -d $$SILO_DIR ]; then echo; echo "SILO_DIR=$$SILO_DIR"; echo; else echo; echo "ERROR: Directory given by SILO_DIR=$$SILO_DIR does not exist"; echo; ${MAKE} err; fi;
+   endif
+
+checkfits:
+   ifeq (X${FITS_DIR}, X)
+	   @echo; echo "ERROR: FITS_DIR should be set before compiling splash with FITS reader"; echo; ${MAKE} err;
+   else
+	   @if [ -d $$FITS_DIR ]; then echo; echo "FITS_DIR=$$FITS_DIR"; echo; else echo; echo "ERROR: Directory given by FITS_DIR=$$FITS_DIR does not exist"; echo; ${MAKE} err; fi;
    endif
 
 checkpbob:
@@ -851,13 +886,13 @@ htmldocs: htmldoc
 
 htmldoc: doc cleanhtmldocs
 	cd ../docs;  \
-        hevea png.hva splash.tex -o html/splash.html; \
-        hevea png.hva splash.tex -o html/splash.html; \
+        hevea png.hva longtable.hva splash.tex -o html/splash.html; \
+        hevea png.hva longtable.hva splash.tex -o html/splash.html; \
         bibhva html/splash; \
         sed 's/et~al./et al./g' html/splash.hbbl > html/tmp.hbbl; \
         mv html/tmp.hbbl html/splash.hbbl; \
-        hevea png.hva splash.tex -o html/splash.html; \
-        hevea png.hva splash.tex -o html/splash.html; \
+        hevea png.hva longtable.hva splash.tex -o html/splash.html; \
+        hevea png.hva longtable.hva splash.tex -o html/splash.html; \
         imagen -png -pdf -mag 2000 html/splash; \
 	cd html; hacha -tocbis splash.html; \
         rm *.gif splash.h{tml,aux,toc,bbl} splash.blg splash.image.tex ../splash.image.out;
@@ -899,7 +934,7 @@ test-parse: $(PLOTLIB) asciiutils.o fparser.o parsetext.o $(TESTDIR)/test-parset
 include .depends
 
 clean:
-	rm -f *.o *.mod $(BINDIR)/?splash $(BINDIR)/splash
+	rm -f *.o *.mod $(BINDIR)/?splash $(BINDIR)/splash libsplash.so libexact.so
 
 cleangiza:
 	${MAKE} -C ../giza clean uninstall

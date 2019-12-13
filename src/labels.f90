@@ -113,7 +113,7 @@ logical function is_coord(icol,ndim)
 
  is_coord = .false.
  do i=1,ndim
-    if (ix(i).eq.icol) is_coord = .true.
+    if (ix(i)==icol) is_coord = .true.
  enddo
 
 end function is_coord
@@ -132,8 +132,8 @@ integer function get_z_dir(ndim,iplotx,iploty) result(iplotz)
 
  iplotz = 0
  do i=1,ndim
-    if ((iplotx.ne.iploty.and. &
-        (ix(i).ne.iplotx).and.(ix(i).ne.iploty))) iplotz = ix(i)
+    if ((iplotx /= iploty.and. &
+        (ix(i) /= iplotx).and.(ix(i) /= iploty))) iplotz = ix(i)
  enddo
 
 end function get_z_dir
@@ -174,10 +174,10 @@ elemental function shortstring(string,unitslab)
  shortstring = string
  !--strip off the units label
  if (present(unitslab)) then
-    if (len_trim(unitslab).gt.0) then
-    !--remove units label (only do this once)
+    if (len_trim(unitslab) > 0) then
+       !--remove units label (only do this once)
        ipos = index(trim(shortstring),trim(unitslab))
-       if (ipos.ne.0) then
+       if (ipos /= 0) then
           shortstring = shortstring(1:ipos-1)//&
                         shortstring(ipos+len_trim(unitslab)+1:len_trim(shortstring))
        endif
@@ -238,38 +238,51 @@ end function shortlabel
 !---------------------------------------------------------------
 function integrate_label(labelin,iplot,izcol,normalise,iRescale,labelzint,&
                          projlabelformat,iapplyprojformat)
-  use asciiutils,      only:string_replace
-  implicit none
-  character(len=*), intent(in) :: labelin,labelzint,projlabelformat
-  integer, intent(in) :: iplot,izcol,iapplyprojformat
-  logical, intent(in) :: normalise,iRescale
-  character(len=len(label)+20) :: integrate_label
+ use asciiutils,      only:string_replace,string_delete
+ implicit none
+ character(len=*), intent(in) :: labelin,labelzint,projlabelformat
+ integer, intent(in) :: iplot,izcol,iapplyprojformat
+ logical, intent(in) :: normalise,iRescale
+ character(len=len(label)+20) :: integrate_label
 
-  if (len_trim(projlabelformat).ne.0 .and. (iapplyprojformat.eq.0 .or. iapplyprojformat.eq.iplot)) then
-     integrate_label = projlabelformat
-     call string_replace(integrate_label,'%l',trim(labelin))
-     if (iRescale) then
-        call string_replace(integrate_label,'%z',trim(label(izcol)(1:index(label(izcol),unitslabel(izcol))-1)))
-        call string_replace(integrate_label,'%uz',trim(unitslabel(izcol)))
-     else
-        call string_replace(integrate_label,'%z',trim(label(izcol)))
-     endif
-  else
-     if (normalise) then
-        integrate_label = '< '//trim(labelin)//' >'
-     else
-        if (iRescale) then
-           integrate_label = '\(2268) '//trim(labelin)//' d'// &
-              trim(label(izcol)(1:index(label(izcol),unitslabel(izcol))-1))//trim(labelzint)
-        else
-           integrate_label = '\(2268) '//trim(labelin)//' d'//trim(label(izcol))
-        endif
-        if (iplot.eq.irho .and. (index(labelin,'density').ne.0 .or. index(labelin,'rho').ne.0)) then
-           integrate_label = 'column density'
-           integrate_label = trim(integrate_label)//get_unitlabel_coldens(iRescale,labelzint,unitslabel(irho))
-        endif
-     endif
-  endif
+ if (len_trim(projlabelformat) /= 0 .and. (iapplyprojformat==0 .or. iapplyprojformat==iplot)) then
+    integrate_label = projlabelformat
+    call string_replace(integrate_label,'%l',trim(labelin))
+    if (iRescale) then
+       call string_replace(integrate_label,'%z',trim(label(izcol)(1:index(label(izcol),unitslabel(izcol))-1)))
+       call string_replace(integrate_label,'%uz',trim(unitslabel(izcol)))
+    else
+       call string_replace(integrate_label,'%z',trim(label(izcol)))
+    endif
+ else
+    if (normalise) then
+       integrate_label = '< '//trim(labelin)//' >'
+    else
+       if (iRescale) then
+          ! use composite units label e.g. \int rho_d [g/cm^3 pc]
+          integrate_label = '\int '// &
+             trim(labelin(1:index(labelin,unitslabel(iplot))-1))//' d'// &
+             trim(label(izcol)(1:index(label(izcol),unitslabel(izcol))-1))// &
+             get_unitlabel_coldens(iRescale,labelzint,unitslabel(iplot))
+          ! use mix of units labels \int rho_d [g/cm^3] dz [pc]
+          !integrate_label = '\int '//trim(labelin)//' d'// &
+          !  trim(label(izcol)(1:index(label(izcol),unitslabel(izcol))-1))//trim(labelzint)
+       else
+          integrate_label = '\int '//trim(labelin)//' d'//trim(label(izcol))
+       endif
+       if (index(labelin,'\rho_{d,') > 0) then
+          integrate_label = labelin(1:index(labelin,unitslabel(iplot))-1)
+          call string_delete(integrate_label,'\rho_{d,')
+          call string_delete(integrate_label,'}')
+          integrate_label = trim(integrate_label)//' dust surface density'
+          integrate_label = trim(integrate_label)//get_unitlabel_coldens(iRescale,labelzint,unitslabel(iplot))
+       endif
+       if (iplot==irho .and. (index(labelin,'density') /= 0 .or. index(labelin,'rho') /= 0)) then
+          integrate_label = 'column density'
+          integrate_label = trim(integrate_label)//get_unitlabel_coldens(iRescale,labelzint,unitslabel(irho))
+       endif
+    endif
+ endif
 end function integrate_label
 
 !-----------------------------------------------------------------
@@ -279,13 +292,18 @@ end function integrate_label
 !
 !-----------------------------------------------------------------
 function get_unitlabel_coldens(iRescale,labelzint,unitlabel)
+ use asciiutils, only:string_delete,string_replace
  logical, intent(in) :: iRescale
  character(len=*), intent(in) :: labelzint,unitlabel
  character(len=lenunitslabel) :: get_unitlabel_coldens
 
- if (iRescale .and. index(labelzint,'cm').gt.0  &
-     .and. trim(adjustl(unitlabel)).eq.'[g/cm\u3\d]') then
-    get_unitlabel_coldens = ' [ g/cm\u2\d]'
+ if (iRescale) then
+    get_unitlabel_coldens = trim(unitlabel)//trim(labelzint)
+    call string_delete(get_unitlabel_coldens,']')
+    call string_delete(get_unitlabel_coldens,'[')
+    get_unitlabel_coldens = ' ['//trim(adjustl(get_unitlabel_coldens))//']'
+    call string_replace(get_unitlabel_coldens,'/cm\u3\d cm','/cm^2')
+    call string_replace(get_unitlabel_coldens,'/cm^3 cm','/cm^2')
  else
     get_unitlabel_coldens = ' '
  endif
@@ -305,7 +323,7 @@ integer function get_sink_type(ntypes)
 
  get_sink_type = 0
  do i=1,ntypes
-    if (get_sink_type.eq.0 .and. index(labeltype(i),'sink').ne.0) get_sink_type = i
+    if (get_sink_type==0 .and. index(labeltype(i),'sink') /= 0) get_sink_type = i
  enddo
 
 end function get_sink_type
@@ -367,5 +385,42 @@ subroutine make_vector_label(lvec,ivec,nvec,iamveci,labelveci,labeli,labelx)
  endif
 
 end subroutine make_vector_label
+
+!-----------------------------------------------------------------
+!
+!  utility to neatly format a grain size for use in plot label
+!
+!-----------------------------------------------------------------
+function get_label_grain_size(sizecm) result(string)
+ use asciiutils, only:string_delete
+ real, intent(in) :: sizecm
+ character(len=16) :: string
+ character(len=6) :: ulab
+
+ if (sizecm > 1000.) then
+    write(string,"(1pg10.3)") sizecm*0.001
+    ulab = 'km'
+ elseif (sizecm > 100.) then
+    write(string,"(1pg10.3)") sizecm*0.01
+    ulab = 'm'
+ elseif (sizecm > 1.) then
+    write(string,"(1pg10.3)") sizecm
+    ulab = 'cm'
+ elseif (sizecm > 0.1) then
+    write(string,"(1pg10.3)") sizecm*10.
+    ulab = 'mm'
+ elseif (sizecm > 1.e-4) then
+    write(string,"(1pg10.3)") sizecm*1.e4
+    ulab = '\gmm'
+ elseif (sizecm > 1.e-7) then
+    write(string,"(1pg10.3)") sizecm*1.e7
+    ulab = 'nm'
+ endif
+ string = adjustl(string)
+ call string_delete(string,'.0 ')
+ call string_delete(string,'. ')
+ string = trim(string)//trim(ulab)
+
+end function get_label_grain_size
 
 end module labels

@@ -15,7 +15,7 @@
 !  a) You must cause the modified files to carry prominent notices
 !     stating that you changed the files and the date of any change.
 !
-!  Copyright (C) 2005-2014 Daniel Price. All rights reserved.
+!  Copyright (C) 2005-2019 Daniel Price. All rights reserved.
 !  Contact: daniel.price@monash.edu
 !
 !-----------------------------------------------------------------
@@ -71,13 +71,13 @@ module particle_data
 
 contains
 
- logical function time_was_read(t)
-  real, intent(in) :: t
+logical function time_was_read(t)
+ real, intent(in) :: t
 
-  time_was_read = .true.
-  if (t <= time_not_read_val) time_was_read = .false.
+ time_was_read = .true.
+ if (t <= time_not_read_val) time_was_read = .false.
 
- end function time_was_read
+end function time_was_read
 
 end module particle_data
 !
@@ -92,27 +92,27 @@ module filenames
  character(len=120) :: defaultsfile,limitsfile,unitsfile,coloursfile
  integer, dimension(maxfile) :: nstepsinfile
  character(len=68)  :: tagline = &
-  'SPLASH: A visualisation tool for SPH data (c)2004-2018 Daniel Price'
+  'SPLASH: A visualisation tool for SPH data (c)2004-2019 Daniel Price'
 
  public
 
 contains
 
- subroutine set_filenames(prefix)
-  implicit none
-  character(len=*), intent(in) :: prefix
+subroutine set_filenames(prefix)
+ implicit none
+ character(len=*), intent(in) :: prefix
 
-  fileprefix   = trim(adjustl(prefix))
-  if (fileprefix(len_trim(fileprefix):len_trim(fileprefix)).eq.'.') then
-     fileprefix = fileprefix(1:len_trim(fileprefix)-1)
-  endif
-  defaultsfile = trim(adjustl(fileprefix))//'.defaults'
-  limitsfile   = trim(adjustl(fileprefix))//'.limits'
-  unitsfile    = trim(adjustl(fileprefix))//'.units'
-  coloursfile  = trim(adjustl(fileprefix))//'.colours'
+ fileprefix   = trim(adjustl(prefix))
+ if (fileprefix(len_trim(fileprefix):len_trim(fileprefix))=='.') then
+    fileprefix = fileprefix(1:len_trim(fileprefix)-1)
+ endif
+ defaultsfile = trim(adjustl(fileprefix))//'.defaults'
+ limitsfile   = trim(adjustl(fileprefix))//'.limits'
+ unitsfile    = trim(adjustl(fileprefix))//'.units'
+ coloursfile  = trim(adjustl(fileprefix))//'.colours'
 
-  return
- end subroutine set_filenames
+ return
+end subroutine set_filenames
 
 end module filenames
 

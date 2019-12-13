@@ -58,9 +58,9 @@ subroutine convert_all(outformat,igotfilenames,useall)
  lowmemorymode = .false. ! must not be true for first file
 
  if (.not.doanalysis) then
- !
- !--for format conversion each dump file is independent
- !
+    !
+    !--for format conversion each dump file is independent
+    !
     print "(/,5('-'),a,/)",'> CONVERTING SNAPSHOTS TO '//trim(ucase(outformat))//' FORMAT '
  endif
 
@@ -68,24 +68,24 @@ subroutine convert_all(outformat,igotfilenames,useall)
  !--if nfiles = 0 (ie. no files read from command line), then call get_data here
  !  to also get nfiles correctly prior to the loop
  !
- if (nfiles.eq.0) then
+ if (nfiles==0) then
     call get_data(1,igotfilenames)
     igotfilenames = .true.
  endif
 
  do ifile=1,nfiles
     !--read data from dump file + calculate extra columns
-    if (ifile.eq.1) then
+    if (ifile==1) then
        call get_data(ifile,igotfilenames,firsttime=.true.)
        !
        ! read plot limits from file (overrides get_data limits settings)
        !
        call read_limits(trim(limitsfile),ierr)
- !
- !--for analysis we need to initialise the output file
- !  and close it at the end - do this here so we know
- !  the first filename and ndimV, labels etc.
- !
+       !
+       !--for analysis we need to initialise the output file
+       !  and close it at the end - do this here so we know
+       !  the first filename and ndimV, labels etc.
+       !
        if (doanalysis) then
           call open_analysis(outformat,required,ncolumns+ncalc,ndim,ndimV)
        endif
@@ -100,7 +100,7 @@ subroutine convert_all(outformat,igotfilenames,useall)
        else
           iloc = idump
        endif
-       if (nstepsinfile(ifile).gt.1) then
+       if (nstepsinfile(ifile) > 1) then
           write(filename,"(a,'_',i5.5)") trim(rootname(ifile)),idump
        else
           filename = trim(rootname(ifile))
